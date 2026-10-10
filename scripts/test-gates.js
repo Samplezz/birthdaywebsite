@@ -114,6 +114,14 @@ async function main() {
     body: JSON.stringify({ name: 'Guest', message: 'Hello' }),
   });
   await expectUnauthenticated('editor wishes moderation rejects unauthenticated access', editorBase, '/api/wishes');
+  await expectUnauthenticated('editor wishes update rejects unauthenticated access', editorBase, '/api/wishes', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 'missing', hidden: true }),
+  });
+  await expectUnauthenticated('editor wishes delete rejects unauthenticated access', editorBase, '/api/wishes?id=missing', {
+    method: 'DELETE',
+  });
   await expectUnauthenticated('site photo upload rejects unauthenticated access', siteBase, '/api/upload/photo', { method: 'POST', body: new FormData() });
   await expectUnauthenticated('editor photo upload rejects unauthenticated access', editorBase, '/api/upload/photo', { method: 'POST', body: new FormData() });
   await expectUnauthenticated('editor audio upload rejects unauthenticated access', editorBase, '/api/upload/audio', { method: 'POST', body: new FormData() });
@@ -168,6 +176,16 @@ async function main() {
       pass('HTML wish is returned as plain text');
     } else {
       fail('HTML wish is returned as plain text', 'response was not safely rendered as text');
+    }
+    const createdWishId = htmlWish.body?.wish?.id;
+    if (createdWishId) {
+      const deletedWish = await request(editorBase, `/api/wishes?id=${encodeURIComponent(createdWishId)}`, {
+        method: 'DELETE',
+        headers: { cookie: editorLogin.cookie },
+      });
+      expectStatus('test wish is deleted during cleanup', deletedWish, 200);
+    } else {
+      fail('test wish cleanup', 'wish creation response did not include an ID');
     }
   } else {
     fail('HTML wish is returned as plain text', `POST returned ${htmlWish.response.status}`);

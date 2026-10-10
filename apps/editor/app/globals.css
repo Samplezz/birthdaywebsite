@@ -32,6 +32,27 @@
 }
 
 html, body {
+  overflow-x: hidden;
+}
+
+button {
+  min-height: 44px;
+}
+
+input, textarea, select {
+  max-width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html, body {
   background-color: var(--bg-editor);
   color: var(--text-main);
   font-family: var(--font-main);

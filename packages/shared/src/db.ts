@@ -1,6 +1,7 @@
+import crypto from 'crypto';
 import { Pool } from 'pg';
-import { DEFAULT_SITE_CONTENT } from './defaults';
-import { SiteContent } from './types';
+import { DEFAULT_SITE_CONTENT, mergeSiteContent } from './defaults';
+import { GuestWish, SiteContent } from './types';
 
 let pool: Pool | null = null;
 let initializationPromise: Promise<void> | null = null;
@@ -55,6 +56,14 @@ export function initializeDatabase(): Promise<void> {
           key TEXT PRIMARY KEY,
           count INTEGER NOT NULL,
           reset_at BIGINT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS wishes (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          message TEXT NOT NULL,
+          hidden BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
       `);
       await client.query(
@@ -155,6 +164,79 @@ export async function recordRateLimitFailure(
   }
 }
 
+export async function recordRateLimitSuccess(
+  key: string,
+  maxAttempts: number,
+  windowSeconds: number
+) {
+  return recordRateLimitFailure(key, maxAttempts, windowSeconds);
+}
+
+function mapWish(row: { id: string; name: string; message: string; hidden: boolean; created_at: Date | string }): GuestWish {
+  return {
+    id: row.id,
+    authorName: row.name,
+    message: row.message,
+    createdAt: new Date(row.created_at).toISOString(),
+    isHidden: row.hidden,
+  };
+}
+
+export async function getWishes(includeHidden = false): Promise<GuestWish[]> {
+  await initializeDatabase();
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      includeHidden
+        ? 'SELECT id, name, message, hidden, created_at FROM wishes ORDER BY created_at DESC LIMIT 100'
+        : 'SELECT id, name, message, hidden, created_at FROM wishes WHERE hidden = FALSE ORDER BY created_at DESC LIMIT 100'
+    );
+    return result.rows.map(mapWish);
+  } finally {
+    client.release();
+  }
+}
+
+export async function createWish(name: string, message: string): Promise<GuestWish | null> {
+  await initializeDatabase();
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `
+      INSERT INTO wishes (id, name, message)
+      SELECT $1, $2, $3
+      WHERE (SELECT COUNT(*) FROM wishes) < 300
+      RETURNING id, name, message, hidden, created_at;
+      `,
+      [crypto.randomUUID(), name, message]
+    );
+    return result.rows.length ? mapWish(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
+}
+
+export async function setWishHidden(id: string, hidden: boolean): Promise<GuestWish | null> {
+  await initializeDatabase();
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `UPDATE wishes SET hidden = $2 WHERE id = $1
+       RETURNING id, name, message, hidden, created_at`,
+      [id, hidden]
+    );
+    return result.rows.length ? mapWish(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteWish(id: string): Promise<boolean> {
+  await initializeDatabase();
+  const result = await getPool().query('DELETE FROM wishes WHERE id = $1', [id]);
+  return result.rowCount === 1;
+}
+
 /**
  * Reads site content from Postgres.
  */
@@ -165,7 +247,7 @@ export async function getSiteContent(): Promise<SiteContent> {
   try {
     const res = await client.query('SELECT data FROM site_content WHERE id = $1', ['main']);
     if (res.rows.length > 0) {
-      return res.rows[0].data as SiteContent;
+      return mergeSiteContent(res.rows[0].data);
     }
     throw new Error('Site content is not initialized in the database.');
   } finally {
@@ -181,7 +263,7 @@ export async function getSiteContentHistory(): Promise<SiteContent[]> {
     const res = await client.query(
       'SELECT data FROM site_content_history ORDER BY id DESC'
     );
-    return res.rows.map((row) => row.data as SiteContent);
+    return res.rows.map((row) => mergeSiteContent(row.data));
   } finally {
     client.release();
   }
@@ -268,7 +350,7 @@ export async function undoLastPublish(): Promise<SiteContent | null> {
     await client.query('DELETE FROM site_content_history WHERE id = $1', [id]);
 
     await client.query('COMMIT');
-    return data as SiteContent;
+    return mergeSiteContent(data);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

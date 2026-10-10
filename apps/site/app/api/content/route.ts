@@ -1,10 +1,15 @@
-import { NextResponse } from 'next/server';
-import { getSiteContent, initializeDatabase } from '@birthday/shared/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getSiteContent, initializeDatabase, verifySessionToken } from '@birthday/shared/server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get('visitor_session')?.value;
+  if (!token || !(await verifySessionToken(token, 'visitor'))) {
+    return NextResponse.json({ error: 'Unauthorized. Visitor session required.' }, { status: 401 });
+  }
+
   try {
     await initializeDatabase();
     const content = await getSiteContent();

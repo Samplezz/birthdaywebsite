@@ -1,6 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifySessionToken } from '@birthday/shared/server';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const token = req.cookies.get('visitor_session')?.value;
+  if (!token || !(await verifySessionToken(token, 'visitor'))) {
+    return NextResponse.json({ error: 'Unauthorized. Visitor session required.' }, { status: 401 });
+  }
+
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
   response.cookies.set('visitor_session', '', {
     httpOnly: true,

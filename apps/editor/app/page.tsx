@@ -90,26 +90,11 @@ export default function EditorPage() {
   const [audioUploading, setAudioUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Mock initial guest wishes for moderation preview
-  const [guestWishes, setGuestWishes] = useState<GuestWish[]>([
-    {
-      id: 'wish-1',
-      authorName: 'Aunt Eleanor',
-      message: 'Happy Birthday, darling! Wishing you a magical year ahead filled with love and laughter! 💖🎂',
-      createdAt: 'Just now',
-      isHidden: false,
-    },
-    {
-      id: 'wish-2',
-      authorName: 'Marcus & Lily',
-      message: 'Happy Birthday to our favorite person! Can not wait to celebrate together soon! ✨🎉',
-      createdAt: '2 hours ago',
-      isHidden: false,
-    },
-  ]);
+  const [guestWishes, setGuestWishes] = useState<GuestWish[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceTargetPhotoId = useRef<string | null>(null);
+  const photoUploadMode = useRef<'gallery' | 'scratch'>('gallery');
   const audioInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load content from backend on mount
@@ -129,6 +114,13 @@ export default function EditorPage() {
         if (data.canUndo) setCanUndo(true);
       })
       .catch(() => {});
+
+    fetch('/api/wishes')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.wishes) setGuestWishes(data.wishes);
+      })
+      .catch((err) => setErrorMessage(err instanceof Error ? err.message : 'Could not load guest wishes.'));
   }, []);
 
   // Warn before leaving with unsaved changes
@@ -188,6 +180,7 @@ export default function EditorPage() {
     if (!file) return;
 
     const targetId = replaceTargetPhotoId.current;
+    const isScratchUpload = photoUploadMode.current === 'scratch';
     const tempKey = targetId || 'new';
     setUploadingState((prev) => ({ ...prev, [tempKey]: true }));
     setErrorMessage(null);
@@ -207,6 +200,7 @@ export default function EditorPage() {
       if (targetId) {
         formData.append('replacePhotoId', targetId);
       }
+      if (isScratchUpload) formData.append('scratchPhoto', 'true');
 
       const uploadRes = await fetch('/api/upload/photo', {
         method: 'POST',
@@ -220,7 +214,9 @@ export default function EditorPage() {
 
       const blobPathname = uploadData.pathname;
 
-      if (targetId) {
+      if (isScratchUpload) {
+        updateField('scratchPhoto', blobPathname);
+      } else if (targetId) {
         updatePhoto(targetId, 'url', blobPathname);
       } else {
         const newPhoto: PhotoMemory = {
@@ -240,6 +236,7 @@ export default function EditorPage() {
     } finally {
       setUploadingState((prev) => ({ ...prev, [tempKey]: false }));
       replaceTargetPhotoId.current = null;
+      photoUploadMode.current = 'gallery';
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -296,6 +293,10 @@ export default function EditorPage() {
 
   // Quiz Handlers
   const addQuizQuestion = () => {
+    if (content.quizQuestions.length >= 10) {
+      setErrorMessage('You can add up to 10 quiz questions.');
+      return;
+    }
     const newQ: QuizQuestion = {
       id: `q-${Date.now()}`,
       question: 'New romantic question',
@@ -339,15 +340,41 @@ export default function EditorPage() {
     setIsDirty(true);
   };
 
-  // Wish Moderation
-  const toggleHideWish = (id: string) => {
-    setGuestWishes((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, isHidden: !w.isHidden } : w))
-    );
+  const moveQuizQuestion = (index: number, direction: 'up' | 'down') => {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= content.quizQuestions.length) return;
+    const questions = [...content.quizQuestions];
+    [questions[index], questions[target]] = [questions[target], questions[index]];
+    setContent((prev) => ({ ...prev, quizQuestions: questions }));
+    setIsDirty(true);
   };
 
-  const deleteWish = (id: string) => {
-    setGuestWishes((prev) => prev.filter((w) => w.id !== id));
+  // Wish Moderation
+  const toggleHideWish = async (wish: GuestWish) => {
+    try {
+      const res = await fetch('/api/wishes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: wish.id, hidden: !wish.isHidden }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not update that wish.');
+      setGuestWishes((prev) => prev.map((item) => item.id === wish.id ? data.wish : item));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not update that wish.');
+    }
+  };
+
+  const deleteWish = async (id: string) => {
+    if (!window.confirm('Delete this guest wish permanently?')) return;
+    try {
+      const res = await fetch(`/api/wishes?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not delete that wish.');
+      setGuestWishes((prev) => prev.filter((wish) => wish.id !== id));
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Could not delete that wish.');
+    }
   };
 
   // Save & Publish
@@ -622,6 +649,17 @@ export default function EditorPage() {
                 onChange={(e) => updateField('envelopeSignoff', e.target.value)}
               />
             </div>
+
+            <div className="field-group">
+              <label className="editor-label">Final Message After the Fireworks (max 500 characters)</label>
+              <textarea
+                rows={4}
+                maxLength={500}
+                className="editor-textarea"
+                value={content.finalMessage}
+                onChange={(e) => updateField('finalMessage', e.target.value)}
+              />
+            </div>
           </section>
         )}
 
@@ -690,6 +728,7 @@ export default function EditorPage() {
                 disabled={uploadingState['new']}
                 onClick={() => {
                   replaceTargetPhotoId.current = null;
+                  photoUploadMode.current = 'gallery';
                   fileInputRef.current?.click();
                 }}
               >
@@ -721,6 +760,7 @@ export default function EditorPage() {
                       disabled={uploadingState[photo.id]}
                       onClick={() => {
                         replaceTargetPhotoId.current = photo.id;
+                        photoUploadMode.current = 'gallery';
                         fileInputRef.current?.click();
                       }}
                     >
@@ -915,7 +955,28 @@ export default function EditorPage() {
             </div>
 
             <div className="field-group">
-              <label className="editor-label">Success Message Shown Upon Finishing Quiz</label>
+              <label className="editor-label">Low Score Message</label>
+              <input
+                type="text"
+                className="editor-input"
+                value={content.quizLowScoreMessage}
+                onChange={(e) => updateField('quizLowScoreMessage', e.target.value)}
+              />
+              <label className="editor-label">Medium Score Message</label>
+              <input
+                type="text"
+                className="editor-input"
+                value={content.quizMediumScoreMessage}
+                onChange={(e) => updateField('quizMediumScoreMessage', e.target.value)}
+              />
+              <label className="editor-label">High Score Message</label>
+              <input
+                type="text"
+                className="editor-input"
+                value={content.quizHighScoreMessage}
+                onChange={(e) => updateField('quizHighScoreMessage', e.target.value)}
+              />
+              <label className="editor-label">Legacy Success Message</label>
               <input
                 type="text"
                 className="editor-input"
@@ -929,6 +990,10 @@ export default function EditorPage() {
                 <div key={q.id} className="quiz-q-card">
                   <div className="q-header">
                     <span className="q-badge">Question {qIdx + 1}</span>
+                    <div className="order-btns">
+                      <button type="button" className="order-btn" disabled={qIdx === 0} onClick={() => moveQuizQuestion(qIdx, 'up')}><ArrowUp size={14} /> Up</button>
+                      <button type="button" className="order-btn" disabled={qIdx === content.quizQuestions.length - 1} onClick={() => moveQuizQuestion(qIdx, 'down')}><ArrowDown size={14} /> Down</button>
+                    </div>
                     <button
                       type="button"
                       className="btn-danger"
@@ -996,19 +1061,43 @@ export default function EditorPage() {
             </div>
 
             <div className="field-group">
-              <label className="editor-label">Surprise Birthday Gift / Message</label>
+              <label className="editor-label">Scratch Card Title</label>
+              <input
+                className="editor-input"
+                value={content.scratchTitle}
+                maxLength={120}
+                onChange={(e) => updateField('scratchTitle', e.target.value)}
+              />
+              <label className="editor-label">Hidden Surprise (max 300 characters)</label>
               <textarea
                 rows={4}
                 className="editor-textarea"
-                value={content.scratchCard.surpriseText}
-                onChange={(e) =>
-                  setContent((prev) => ({
-                    ...prev,
-                    scratchCard: { ...prev.scratchCard, surpriseText: e.target.value },
-                  }))
-                }
+                maxLength={300}
+                value={content.scratchHiddenText}
+                onChange={(e) => updateField('scratchHiddenText', e.target.value)}
               />
-              <p className="editor-hint">Revealed when she scratches off 50% of the card.</p>
+              <p className="editor-hint">Revealed after roughly 60% of the card is scratched.</p>
+              <div className="field-group">
+                <label className="editor-label">Optional Scratch Photo</label>
+                <div className="photo-actions-row">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      photoUploadMode.current = 'scratch';
+                      replaceTargetPhotoId.current = null;
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <Upload size={16} /> Upload Scratch Photo
+                  </button>
+                  {content.scratchPhoto && (
+                    <button type="button" className="btn-danger" onClick={() => updateField('scratchPhoto', '')}>
+                      <Trash2 size={15} /> Remove Scratch Photo
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -1036,7 +1125,7 @@ export default function EditorPage() {
                         <button
                           type="button"
                           className="btn-secondary wish-btn"
-                          onClick={() => toggleHideWish(wish.id)}
+                          onClick={() => toggleHideWish(wish)}
                         >
                           {wish.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
                           {wish.isHidden ? 'Unhide' : 'Hide from Public'}

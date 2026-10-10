@@ -62,15 +62,22 @@ export interface SiteContent {
 
   // 7. Scratch Card (Phase 5)
   scratchCard: ScratchCardConfig;
+  scratchTitle: string;
+  scratchHiddenText: string;
+  scratchPhoto: string;
 
   // 8. Quiz (Phase 5)
   quizQuestions: QuizQuestion[];
   quizPassingScore: number;
   quizSuccessMessage: string;
+  quizLowScoreMessage: string;
+  quizMediumScoreMessage: string;
+  quizHighScoreMessage: string;
 
   // 9. Fireworks & Finale (Phase 5)
   finalLoveLetter: string;
   finalSignature: string;
+  finalMessage: string;
 }
 
 export interface SessionPayload {

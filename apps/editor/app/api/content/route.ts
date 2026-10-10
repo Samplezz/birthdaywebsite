@@ -7,6 +7,7 @@ import {
   sanitizeText,
   initializeDatabase,
   SiteContent,
+  verifySessionToken,
 } from '@birthday/shared/server';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,12 @@ const BLOB_PATHNAME_PATTERNS = {
   audio: /^audio\/[A-Za-z0-9][A-Za-z0-9._-]*$/,
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get('editor_session')?.value;
+  if (!token || !(await verifySessionToken(token, 'editor'))) {
+    return NextResponse.json({ error: 'Unauthorized. Editor session required.' }, { status: 401 });
+  }
+
   try {
     await initializeDatabase();
     const content = await getSiteContent();
@@ -28,6 +34,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const token = req.cookies.get('editor_session')?.value;
+  if (!token || !(await verifySessionToken(token, 'editor'))) {
+    return NextResponse.json({ error: 'Unauthorized. Editor session required.' }, { status: 401 });
+  }
+
   try {
     await initializeDatabase();
     const oldContent = await getSiteContent();
@@ -41,11 +52,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'A maximum of 12 photos is allowed.' }, { status: 400 });
     }
 
+    if (body.quizQuestions.length > 10 || body.quizQuestions.some((question) =>
+      question.question.length > 150 ||
+      question.options.length < 2 ||
+      question.options.length > 4 ||
+      question.options.some((option) => option.length > 80) ||
+      !Number.isInteger(question.correctIndex) ||
+      question.correctIndex < 0 ||
+      question.correctIndex >= question.options.length
+    )) {
+      return NextResponse.json({ error: 'Quiz questions need 2 to 4 options, valid answers, and the stated character limits.' }, { status: 400 });
+    }
+
     if (
       (body.musicUrl !== '' && !BLOB_PATHNAME_PATTERNS.audio.test(body.musicUrl)) ||
-      !body.photos.every((photo) => BLOB_PATHNAME_PATTERNS.photo.test(photo.url))
+      !body.photos.every((photo) => BLOB_PATHNAME_PATTERNS.photo.test(photo.url)) ||
+      (body.scratchPhoto !== '' && !BLOB_PATHNAME_PATTERNS.photo.test(body.scratchPhoto))
     ) {
       return NextResponse.json({ error: 'Media values must be private Blob pathnames.' }, { status: 400 });
+    }
+
+    if (body.scratchHiddenText.length > 300) {
+      return NextResponse.json({ error: 'Scratch hidden text must be 300 characters or fewer.' }, { status: 400 });
+    }
+
+    if (body.finalMessage.length > 500) {
+      return NextResponse.json({ error: 'Final message must be 500 characters or fewer.' }, { status: 400 });
     }
 
     // Rigorous XSS Sanitization for all string fields
@@ -61,6 +93,11 @@ export async function POST(req: NextRequest) {
       countdownTitle: sanitizeText(body.countdownTitle),
       countdownCelebrationText: sanitizeText(body.countdownCelebrationText),
       musicTitle: sanitizeText(body.musicTitle),
+      scratchTitle: sanitizeText(body.scratchTitle),
+      scratchHiddenText: sanitizeText(body.scratchHiddenText),
+      quizLowScoreMessage: sanitizeText(body.quizLowScoreMessage),
+      quizMediumScoreMessage: sanitizeText(body.quizMediumScoreMessage),
+      quizHighScoreMessage: sanitizeText(body.quizHighScoreMessage),
       photos: body.photos.map((p) => ({
         ...p,
         caption: sanitizeText(p.caption),
@@ -79,6 +116,7 @@ export async function POST(req: NextRequest) {
       },
       finalLoveLetter: sanitizeText(body.finalLoveLetter),
       finalSignature: sanitizeText(body.finalSignature),
+      finalMessage: sanitizeText(body.finalMessage),
       quizSuccessMessage: sanitizeText(body.quizSuccessMessage),
     };
 
@@ -88,21 +126,25 @@ export async function POST(req: NextRequest) {
     const candidateMediaPathnames = new Set([
       ...oldContent.photos.map((photo) => photo.url),
       oldContent.musicUrl,
+      oldContent.scratchPhoto,
       ...history.flatMap((content) => [
         ...content.photos.map((photo) => photo.url),
         content.musicUrl,
+        content.scratchPhoto,
       ]),
-    ]);
+    ].filter(Boolean));
     const protectedMediaPathnames = new Set([
       ...sanitizedContent.photos.map((photo) => photo.url),
       sanitizedContent.musicUrl,
+      sanitizedContent.scratchPhoto,
       ...(history[0]
         ? [
             ...history[0].photos.map((photo) => photo.url),
             history[0].musicUrl,
+            history[0].scratchPhoto,
           ]
         : []),
-    ]);
+      ].filter(Boolean));
     const orphanedPathnames = Array.from(candidateMediaPathnames).filter(
       (pathname): pathname is string => Boolean(pathname) && !protectedMediaPathnames.has(pathname)
     );

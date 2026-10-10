@@ -26,6 +26,7 @@ export default function CakeCandles({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
   const stopMicrophone = () => {
     if (animationFrameRef.current) {
@@ -122,13 +123,20 @@ export default function CakeCandles({
   };
 
   useEffect(() => {
+    const section = sectionRef.current;
+    const observer = section ? new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) stopMicrophone();
+    }, { threshold: 0.05 }) : null;
+    if (section && observer) observer.observe(section);
+
     return () => {
+      observer?.disconnect();
       stopMicrophone();
     };
   }, []);
 
   return (
-    <section className="cake-section">
+    <section ref={sectionRef} className="cake-section">
       <div className="section-header text-center">
         <span className="badge-pill">
           <Sparkles size={14} /> Birthday Cake & Candles

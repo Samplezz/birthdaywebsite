@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const replacePhotoId = formData.get('replacePhotoId') as string | null;
+    const isScratchPhoto = formData.get('scratchPhoto') === 'true';
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -69,7 +70,8 @@ export async function POST(req: NextRequest) {
       ? content.photos.some((photo) => photo.id === replacePhotoId)
       : false;
 
-    if (!replacingExistingPhoto && content.photos.length >= STORAGE_LIMITS.photos.maxCount) {
+    const scratchPhotoAlreadyExists = isScratchPhoto && Boolean(content.scratchPhoto);
+    if (!replacingExistingPhoto && !scratchPhotoAlreadyExists && content.photos.length >= STORAGE_LIMITS.photos.maxCount) {
       return NextResponse.json(
         { error: `Maximum of ${STORAGE_LIMITS.photos.maxCount} photos reached. Replace an existing photo first.` },
         { status: 400 }

@@ -73,6 +73,9 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
     surpriseText: '🎟️ Secret Birthday Gift: A weekend getaway under the stars, just you and me! 💖',
     scratchPercentageThreshold: 50
   },
+  scratchTitle: 'A little secret for you',
+  scratchHiddenText: 'You are my favorite adventure. Your surprise is waiting for us under the stars! 💖',
+  scratchPhoto: '',
 
   // Quiz (Phase 5)
   quizQuestions: [
@@ -93,8 +96,32 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
   ],
   quizPassingScore: 2,
   quizSuccessMessage: 'You know our love story by heart! 100% soulmates! 💕',
+  quizLowScoreMessage: 'Every love story has more chapters to discover. Let us make more memories! 💕',
+  quizMediumScoreMessage: 'You know us beautifully well. There is still room for a few more adventures! ✨',
+  quizHighScoreMessage: 'You know our love story by heart! We are completely in sync! 💖',
 
   // Finale
   finalLoveLetter: 'Thank you for being my anchor, my sanctuary, and my greatest joy. Happy Birthday, darling.',
-  finalSignature: 'With all my endless devotion ❤️'
+  finalSignature: 'With all my endless devotion ❤️',
+  finalMessage: 'The best is still ahead of us. Happy Birthday, my love!'
 };
+
+export function mergeSiteContent(stored: Partial<SiteContent>): SiteContent {
+  return {
+    ...DEFAULT_SITE_CONTENT,
+    ...stored,
+    photos: stored.photos ?? DEFAULT_SITE_CONTENT.photos,
+    scratchCard: {
+      ...DEFAULT_SITE_CONTENT.scratchCard,
+      ...(stored.scratchCard ?? {}),
+    },
+    scratchTitle: stored.scratchTitle ?? DEFAULT_SITE_CONTENT.scratchTitle,
+    scratchHiddenText: stored.scratchHiddenText ?? DEFAULT_SITE_CONTENT.scratchHiddenText,
+    scratchPhoto: stored.scratchPhoto ?? DEFAULT_SITE_CONTENT.scratchPhoto,
+    quizQuestions: stored.quizQuestions ?? DEFAULT_SITE_CONTENT.quizQuestions,
+    quizLowScoreMessage: stored.quizLowScoreMessage ?? DEFAULT_SITE_CONTENT.quizLowScoreMessage,
+    quizMediumScoreMessage: stored.quizMediumScoreMessage ?? DEFAULT_SITE_CONTENT.quizMediumScoreMessage,
+    quizHighScoreMessage: stored.quizHighScoreMessage ?? DEFAULT_SITE_CONTENT.quizHighScoreMessage,
+    finalMessage: stored.finalMessage ?? DEFAULT_SITE_CONTENT.finalMessage,
+  };
+}

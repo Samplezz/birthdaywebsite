@@ -8,6 +8,10 @@ import EnvelopeLetter from './components/EnvelopeLetter';
 import CakeCandles from './components/CakeCandles';
 import PhotoGallery from './components/PhotoGallery';
 import CountdownTimer from './components/CountdownTimer';
+import WishesWall from './components/WishesWall';
+import ScratchCard from './components/ScratchCard';
+import QuizGame from './components/QuizGame';
+import FireworksFinale from './components/FireworksFinale';
 
 export default function BirthdayPage() {
   const [content, setContent] = useState<SiteContent>(DEFAULT_SITE_CONTENT);
@@ -52,7 +56,14 @@ export default function BirthdayPage() {
       />
 
       <div className="content-flow">
-        {/* 1. Envelope & Hero Birthday Letter (Opening triggers music playback) */}
+        {/* 1. Countdown */}
+        <CountdownTimer
+          targetDateString={content.countdownTargetDate}
+          countdownTitle={content.countdownTitle}
+          celebrationMessage={content.countdownCelebrationText}
+        />
+
+        {/* 2. Envelope & Hero Birthday Letter */}
         <EnvelopeLetter
           recipientName={content.recipientName}
           heroTitle={content.heroTitle}
@@ -62,7 +73,7 @@ export default function BirthdayPage() {
           onOpenLetter={handleEnvelopeOpen}
         />
 
-        {/* 2. Birthday Cake & Blowing Candles (Web Audio Mic + Tap Fallback) */}
+        {/* 3. Birthday Cake & Blowing Candles */}
         <CakeCandles
           candleCount={content.candleCount}
           wishPrompt={content.cakeWishPrompt}
@@ -70,16 +81,22 @@ export default function BirthdayPage() {
           onCandlesBlownOut={handleCandlesBlownOut}
         />
 
-        {/* 3. Birthday Countdown */}
-        <CountdownTimer
-          targetDateString={content.countdownTargetDate}
-          countdownTitle={content.countdownTitle}
-          celebrationMessage={content.countdownCelebrationText}
-          onCelebration={handleCountdownZero}
-        />
+        {grandCelebration && <FireworksFinale finalMessage={content.finalMessage} />}
 
-        {/* 4. Cherished Memories Photo Timeline & Lightbox */}
+        {/* 5. Cherished Memories, scratch card, quiz and wishes */}
         <PhotoGallery photos={content.photos} />
+        <ScratchCard
+          title={content.scratchTitle}
+          hiddenText={content.scratchHiddenText}
+          photoPathname={content.scratchPhoto}
+        />
+        <QuizGame
+          questions={content.quizQuestions}
+          lowMessage={content.quizLowScoreMessage}
+          mediumMessage={content.quizMediumScoreMessage}
+          highMessage={content.quizHighScoreMessage}
+        />
+        <WishesWall />
 
         <footer className="site-footer">
           <p className="footer-love script-heading">Made with all my heart, just for you ❤️</p>
