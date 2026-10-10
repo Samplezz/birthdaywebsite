@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit, createSessionToken, verifyPassword } from '@birthday/shared/server';
+import {
+  checkRateLimit,
+  createSessionToken,
+  recordRateLimitFailure,
+  verifyPassword,
+} from '@birthday/shared/server';
 
 export async function POST(req: NextRequest) {
   try {
     // Correctly extract client IP from Vercel headers (first IP in x-forwarded-for or x-real-ip)
     const forwarded = req.headers.get('x-forwarded-for');
-    const ip = forwarded ? forwarded.split(',')[0].trim() : req.headers.get('x-real-ip')?.trim() || '127.0.0.1';
+    const ip = forwarded?.split(',')[0]?.trim() || req.headers.get('x-real-ip')?.trim();
+    if (!ip) {
+      return NextResponse.json({ error: 'Client IP address is unavailable.' }, { status: 400 });
+    }
 
     // 1. Strictly Per-IP & Per-Gate Rate Limiting (Keyed by visitor_login:<ip>)
     // Stranger attempts on visitor site CANNOT lock out the owner or other IPs
-    const rateCheck = await checkRateLimit(`visitor_login:${ip}`, 5, 900);
+    const rateCheck = await checkRateLimit(`visitor_login:${ip}`, 10, 900);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         {
@@ -27,9 +35,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Server-Side Password Verification (Strictly from Environment Variables - Zero hardcoded secrets)
-    const storedSecret = process.env.VISITOR_PASSWORD_HASH || process.env.VISITOR_PASSWORD;
+    const storedSecret = process.env.VISITOR_PASSWORD_HASH;
     if (!storedSecret) {
-      console.error('CRITICAL ERROR: VISITOR_PASSWORD_HASH or VISITOR_PASSWORD is not set in environment.');
+      console.error('CRITICAL ERROR: VISITOR_PASSWORD_HASH is not set in environment.');
       return NextResponse.json(
         { error: 'Server configuration error: visitor password is not configured.' },
         { status: 500 }
@@ -39,10 +47,11 @@ export async function POST(req: NextRequest) {
     const isValid = await verifyPassword(password, storedSecret);
 
     if (!isValid) {
+      const failedRate = await recordRateLimitFailure(`visitor_login:${ip}`, 10, 900);
       return NextResponse.json(
         {
           error: 'Incorrect password. Please try again.',
-          remainingAttempts: rateCheck.remaining,
+          remainingAttempts: failedRate.remaining,
         },
         { status: 401 }
       );
@@ -62,8 +71,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Authentication error';
-    console.error('Visitor login error:', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error('Visitor login error:', err);
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

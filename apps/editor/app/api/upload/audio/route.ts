@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadPrivateBlob, validateUpload, STORAGE_LIMITS } from '@birthday/shared/server';
+import { uploadPrivateBlob, validateUpload, STORAGE_LIMITS, verifySessionToken } from '@birthday/shared/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,13 @@ export const dynamic = 'force-dynamic';
  * Vercel serverless body limit is ~4.5 MB. Our audio cap is 4 MB, well within that.
  */
 export async function POST(req: NextRequest) {
+  const sessionToken = req.cookies.get('editor_session')?.value;
+  const session = sessionToken ? await verifySessionToken(sessionToken, 'editor') : null;
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized. Editor session required.' }, { status: 401 });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -22,14 +29,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
-    // Server-side validation of type and size
-    validateUpload('audio', file.type, file.size);
-
     // Read file into buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Double-check actual received size
+    if (file.size !== buffer.length) {
+      return NextResponse.json({ error: 'Received file size does not match the uploaded file.' }, { status: 400 });
+    }
+
     if (buffer.length > STORAGE_LIMITS.audio.maxBytes) {
       return NextResponse.json(
         { error: `Audio file exceeds ${(STORAGE_LIMITS.audio.maxBytes / (1024 * 1024)).toFixed(0)} MB limit` },
@@ -37,15 +44,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const hasId3Tag = buffer.length >= 3 && buffer.toString('ascii', 0, 3) === 'ID3';
+    const hasMpegFrameSync = buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
+
+    if (!hasId3Tag && !hasMpegFrameSync) {
+      return NextResponse.json({ error: 'Invalid audio signature. Only MP3 files are accepted.' }, { status: 400 });
+    }
+
+    validateUpload('audio', file.type, buffer.length);
+
+    const safeFileName = (file.name || 'music.mp3').replace(/[^A-Za-z0-9._-]/g, '-');
     const result = await uploadPrivateBlob(
-      `audio/${Date.now()}-${file.name || 'music.mp3'}`,
+      `audio/${Date.now()}-${safeFileName.slice(0, 60)}`,
       buffer,
-      file.type
+      'audio/mpeg'
     );
 
     return NextResponse.json({
       success: true,
-      url: result.url,
       pathname: result.pathname,
       size: result.size,
     });

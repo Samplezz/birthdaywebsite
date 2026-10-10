@@ -32,7 +32,7 @@ export async function uploadPrivateBlob(
   pathname: string,
   buffer: Buffer | Blob,
   contentType: string
-): Promise<{ url: string; pathname: string; size: number }> {
+): Promise<{ pathname: string; size: number }> {
   const token = requireBlobToken();
 
   const blob = await put(pathname, buffer, {
@@ -42,10 +42,11 @@ export async function uploadPrivateBlob(
     token,
   });
 
+  const size = buffer instanceof Blob ? buffer.size : buffer.length;
+
   return {
-    url: blob.url,
     pathname: blob.pathname,
-    size: buffer instanceof Buffer ? buffer.length : buffer.size,
+    size,
   };
 }
 
@@ -55,29 +56,27 @@ export async function uploadPrivateBlob(
 export async function deletePrivateBlob(urlOrPath: string): Promise<void> {
   if (!urlOrPath) return;
   const token = requireBlobToken();
-  try {
-    await del(urlOrPath, { token });
-  } catch (err) {
-    console.warn('Failed to delete blob:', err);
-  }
+  await del(urlOrPath, { token });
 }
 
 /**
  * Fetches a private blob from Vercel Blob using the authenticated token.
  * Returns a standard Response that can be streamed to the client.
  */
-export async function fetchPrivateBlob(blobUrl: string): Promise<Response> {
+export async function fetchPrivateBlob(blobUrl: string, rangeHeader?: string): Promise<Response> {
   const token = requireBlobToken();
 
-  const resp = await fetch(blobUrl, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
 
-  if (!resp.ok) {
-    throw new Error(`Failed to fetch blob: ${resp.status} ${resp.statusText}`);
+  if (rangeHeader) {
+    headers.Range = rangeHeader;
   }
+
+  const resp = await fetch(blobUrl, {
+    headers,
+  });
 
   return resp;
 }

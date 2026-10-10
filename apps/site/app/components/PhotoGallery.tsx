@@ -10,8 +10,15 @@ interface PhotoGalleryProps {
 
 export default function PhotoGallery({ photos }: PhotoGalleryProps) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [unavailablePhotoIds, setUnavailablePhotoIds] = useState<Set<string>>(new Set());
 
   const sortedPhotos = [...photos].sort((a, b) => a.order - b.order);
+  const availablePhotos = sortedPhotos.filter((photo) => !unavailablePhotoIds.has(photo.id));
+
+  const handlePhotoError = (photoId: string) => {
+    setUnavailablePhotoIds((current) => new Set(current).add(photoId));
+    setSelectedPhotoIndex(null);
+  };
 
   const openLightbox = (index: number) => {
     setSelectedPhotoIndex(index);
@@ -24,13 +31,13 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
   const prevPhoto = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (selectedPhotoIndex === null) return;
-    setSelectedPhotoIndex((selectedPhotoIndex - 1 + sortedPhotos.length) % sortedPhotos.length);
+    setSelectedPhotoIndex((selectedPhotoIndex - 1 + availablePhotos.length) % availablePhotos.length);
   };
 
   const nextPhoto = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (selectedPhotoIndex === null) return;
-    setSelectedPhotoIndex((selectedPhotoIndex + 1) % sortedPhotos.length);
+    setSelectedPhotoIndex((selectedPhotoIndex + 1) % availablePhotos.length);
   };
 
   useEffect(() => {
@@ -43,7 +50,7 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPhotoIndex, sortedPhotos.length]);
+  }, [selectedPhotoIndex, availablePhotos.length]);
 
   return (
     <section className="gallery-section">
@@ -57,7 +64,9 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
 
       {/* Timeline / Polaroid Cards Grid */}
       <div className="photos-grid">
-        {sortedPhotos.map((photo, index) => (
+        {availablePhotos.length === 0 ? (
+          <p className="empty-state">No cherished memories have been added yet.</p>
+        ) : availablePhotos.map((photo, index) => (
           <div
             key={photo.id}
             className="photo-card glass-panel"
@@ -65,10 +74,11 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
           >
             <div className="image-wrapper">
               <img
-                src={photo.url}
+                src={`/api/media?pathname=${encodeURIComponent(photo.url)}`}
                 alt={photo.caption}
                 loading="lazy"
                 className="photo-img"
+                onError={() => handlePhotoError(photo.id)}
               />
               <div className="expand-overlay">
                 <Maximize2 size={20} />
@@ -95,7 +105,7 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
       </div>
 
       {/* Full-screen Lightbox View */}
-      {selectedPhotoIndex !== null && sortedPhotos[selectedPhotoIndex] && (
+      {selectedPhotoIndex !== null && availablePhotos[selectedPhotoIndex] && (
         <div className="lightbox-backdrop" onClick={closeLightbox}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="lightbox-close" onClick={closeLightbox} aria-label="Close photo">
@@ -108,26 +118,27 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
 
             <div className="lightbox-image-box">
               <img
-                src={sortedPhotos[selectedPhotoIndex].url}
-                alt={sortedPhotos[selectedPhotoIndex].caption}
+                src={`/api/media?pathname=${encodeURIComponent(availablePhotos[selectedPhotoIndex].url)}`}
+                alt={availablePhotos[selectedPhotoIndex].caption}
                 className="lightbox-img"
+                onError={() => handlePhotoError(availablePhotos[selectedPhotoIndex].id)}
               />
               <div className="lightbox-details">
                 <div className="meta-row">
-                  {sortedPhotos[selectedPhotoIndex].date && (
+                  {availablePhotos[selectedPhotoIndex].date && (
                     <span className="meta-tag">
-                      <Calendar size={13} /> {sortedPhotos[selectedPhotoIndex].date}
+                      <Calendar size={13} /> {availablePhotos[selectedPhotoIndex].date}
                     </span>
                   )}
-                  {sortedPhotos[selectedPhotoIndex].location && (
+                  {availablePhotos[selectedPhotoIndex].location && (
                     <span className="meta-tag">
-                      <MapPin size={13} /> {sortedPhotos[selectedPhotoIndex].location}
+                      <MapPin size={13} /> {availablePhotos[selectedPhotoIndex].location}
                     </span>
                   )}
                 </div>
-                <p className="lightbox-caption">{sortedPhotos[selectedPhotoIndex].caption}</p>
+                <p className="lightbox-caption">{availablePhotos[selectedPhotoIndex].caption}</p>
                 <span className="lightbox-counter">
-                  {selectedPhotoIndex + 1} of {sortedPhotos.length}
+                  {selectedPhotoIndex + 1} of {availablePhotos.length}
                 </span>
               </div>
             </div>
@@ -186,6 +197,12 @@ export default function PhotoGallery({ photos }: PhotoGalleryProps) {
           gap: 20px;
           width: 100%;
           max-width: 480px;
+        }
+
+        .empty-state {
+          color: var(--text-muted);
+          padding: 28px 16px;
+          text-align: center;
         }
 
         @media (min-width: 640px) {

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadPrivateBlob, validateUpload, STORAGE_LIMITS } from '@birthday/shared/server';
+import {
+  getSiteContent,
+  initializeDatabase,
+  uploadPrivateBlob,
+  validateUpload,
+  STORAGE_LIMITS,
+  verifySessionToken,
+} from '@birthday/shared/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,31 +16,36 @@ export const dynamic = 'force-dynamic';
  * Receives a photo file via multipart form data, validates it server-side,
  * and uploads to Vercel Blob in PRIVATE mode.
  * 
- * Expects: FormData with field "file" (image/webp, image/jpeg, image/png)
- *          and optional "currentPhotoCount" (number string)
+ * Expects: FormData with field "file" (WebP) and optional "replacePhotoId".
  * 
  * Photos should be converted to WebP client-side (which also strips EXIF).
  * Server re-validates type and size before uploading.
  */
 export async function POST(req: NextRequest) {
+  const sessionToken = req.cookies.get('editor_session')?.value;
+  const session = sessionToken ? await verifySessionToken(sessionToken, 'editor') : null;
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized. Editor session required.' }, { status: 401 });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const currentCountStr = formData.get('currentPhotoCount') as string | null;
-    const currentPhotoCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
+    const replacePhotoId = formData.get('replacePhotoId') as string | null;
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Server-side validation of type, size, and count
-    validateUpload('photos', file.type, file.size, currentPhotoCount);
-
     // Read file into buffer for upload
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Double-check actual received size matches
+    if (file.size !== buffer.length) {
+      return NextResponse.json({ error: 'Received file size does not match the uploaded file.' }, { status: 400 });
+    }
+
     if (buffer.length > STORAGE_LIMITS.photos.maxBytes) {
       return NextResponse.json(
         { error: `File exceeds ${(STORAGE_LIMITS.photos.maxBytes / (1024 * 1024)).toFixed(1)} MB limit` },
@@ -41,15 +53,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (
+      buffer.length < 12 ||
+      buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+      buffer.toString('ascii', 8, 12) !== 'WEBP'
+    ) {
+      return NextResponse.json({ error: 'Invalid photo signature. Only WebP files are accepted.' }, { status: 400 });
+    }
+
+    validateUpload('photos', file.type, buffer.length);
+
+    await initializeDatabase();
+    const content = await getSiteContent();
+    const replacingExistingPhoto = replacePhotoId
+      ? content.photos.some((photo) => photo.id === replacePhotoId)
+      : false;
+
+    if (!replacingExistingPhoto && content.photos.length >= STORAGE_LIMITS.photos.maxCount) {
+      return NextResponse.json(
+        { error: `Maximum of ${STORAGE_LIMITS.photos.maxCount} photos reached. Replace an existing photo first.` },
+        { status: 400 }
+      );
+    }
+
+    const safeFileName = (file.name || 'photo.webp').replace(/[^A-Za-z0-9._-]/g, '-');
     const result = await uploadPrivateBlob(
-      `photos/${Date.now()}-${file.name || 'photo.webp'}`,
+      `photos/${Date.now()}-${safeFileName.slice(0, 60)}`,
       buffer,
-      file.type
+      'image/webp'
     );
 
     return NextResponse.json({
       success: true,
-      url: result.url,
       pathname: result.pathname,
       size: result.size,
     });

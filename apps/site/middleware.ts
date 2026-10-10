@@ -5,9 +5,8 @@ import { jwtVerify } from 'jose';
 async function verifyVisitorSession(token: string): Promise<boolean> {
   if (!token) return false;
   try {
-    const rawSecret =
-      process.env.VISITOR_SESSION_SECRET ||
-      'temporary-dev-secret-please-change-in-production-min-32-chars-visitor';
+    const rawSecret = process.env.VISITOR_SESSION_SECRET;
+    if (!rawSecret) return false;
     const secret = new TextEncoder().encode(rawSecret);
     const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
     return payload.role === 'visitor';

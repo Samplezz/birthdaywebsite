@@ -1,6 +1,6 @@
 export interface PhotoMemory {
   id: string;
-  url: string; // Direct image URL or signed storage key
+  url: string; // Private Blob pathname, for example photos/xxx.webp
   caption: string;
   date: string;
   location?: string;
@@ -48,7 +48,7 @@ export interface SiteContent {
 
   // 4. Background Music
   musicTitle: string;
-  musicUrl: string; // Direct URL or signed storage URL
+  musicUrl: string; // Private Blob pathname, for example audio/xxx.mp3
   musicAutoplayOnFirstTap: boolean;
 
   // 5. Countdown

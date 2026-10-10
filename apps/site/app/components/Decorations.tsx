@@ -7,8 +7,12 @@ interface DecorationsProps {
   celebrateTrigger?: boolean;
 }
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 export function fireRomanticConfetti() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || prefersReducedMotion()) return;
   // Heart & rose petal confetti
   confetti({
     particleCount: 50,
@@ -21,7 +25,7 @@ export function fireRomanticConfetti() {
 }
 
 export function fireGrandCelebration() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || prefersReducedMotion()) return;
   const count = 200;
   const defaults = {
     origin: { y: 0.7 },

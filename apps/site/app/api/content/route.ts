@@ -9,8 +9,8 @@ export async function GET() {
     await initializeDatabase();
     const content = await getSiteContent();
 
-    // Photo URLs and music URLs are private blob keys.
-    // The client must fetch media through /api/media?url=<blobUrl> which streams
+    // Photo and music values are private Blob pathnames.
+    // The client fetches media through /api/media?pathname=<blobPathname>, which streams
     // from Vercel Blob with session authentication enforced by middleware.
     return NextResponse.json(
       { success: true, content },

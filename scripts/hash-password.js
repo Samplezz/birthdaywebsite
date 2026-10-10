@@ -18,7 +18,7 @@ function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
     crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
       if (err) return reject(err);
-      resolve(`scrypt$16384$8$1$${salt}$${derivedKey.toString('hex')}`);
+      resolve(`scrypt:${salt}:${derivedKey.toString('hex')}`);
     });
   });
 }

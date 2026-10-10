@@ -11,7 +11,7 @@ export async function hashPassword(password: string): Promise<string> {
   return new Promise((resolve, reject) => {
     crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
       if (err) return reject(err);
-      resolve(`scrypt$16384$8$1$${salt}$${derivedKey.toString('hex')}`);
+      resolve(`scrypt:${salt}:${derivedKey.toString('hex')}`);
     });
   });
 }
@@ -19,16 +19,13 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, storedHashOrSecret: string): Promise<boolean> {
   if (!password || !storedHashOrSecret) return false;
 
-  if (storedHashOrSecret.startsWith('scrypt$')) {
-    const parts = storedHashOrSecret.split('$');
-    if (parts.length !== 6) return false;
-    const [, NStr, rStr, pStr, salt, expectedHashHex] = parts;
-    const N = parseInt(NStr, 10);
-    const r = parseInt(rStr, 10);
-    const p = parseInt(pStr, 10);
+  if (storedHashOrSecret.startsWith('scrypt:')) {
+    const parts = storedHashOrSecret.split(':');
+    if (parts.length !== 3) return false;
+    const [, salt, expectedHashHex] = parts;
 
     return new Promise((resolve) => {
-      crypto.scrypt(password, salt, 64, { N, r, p }, (err, derivedKey) => {
+      crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
         if (err) return resolve(false);
         const expectedBuffer = Buffer.from(expectedHashHex, 'hex');
         if (derivedKey.length !== expectedBuffer.length) return resolve(false);
@@ -52,12 +49,12 @@ export async function verifyPassword(password: string, storedHashOrSecret: strin
 // 2. SIGNED SESSION TOKENS (Web API Compatible: Node.js & Edge)
 // ============================================================================
 
-const DEFAULT_SECRET = 'temporary-dev-secret-please-change-in-production-min-32-chars';
-
 export function getSecretKeyBytes(role: 'visitor' | 'editor'): Uint8Array {
   const envVar = role === 'visitor' ? process.env.VISITOR_SESSION_SECRET : process.env.EDITOR_SESSION_SECRET;
-  const rawSecret = envVar || `${DEFAULT_SECRET}-${role}`;
-  return new TextEncoder().encode(rawSecret);
+  if (!envVar) {
+    throw new Error(`${role.toUpperCase()}_SESSION_SECRET is not configured.`);
+  }
+  return new TextEncoder().encode(envVar);
 }
 
 export async function createSessionToken(role: 'visitor' | 'editor', durationDays = 7): Promise<string> {

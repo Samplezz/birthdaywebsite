@@ -5,9 +5,8 @@ import { jwtVerify } from 'jose';
 async function verifyEditorSession(token: string): Promise<boolean> {
   if (!token) return false;
   try {
-    const rawSecret =
-      process.env.EDITOR_SESSION_SECRET ||
-      'temporary-dev-secret-please-change-in-production-min-32-chars-editor';
+    const rawSecret = process.env.EDITOR_SESSION_SECRET;
+    if (!rawSecret) return false;
     const secret = new TextEncoder().encode(rawSecret);
     const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
     return payload.role === 'editor';

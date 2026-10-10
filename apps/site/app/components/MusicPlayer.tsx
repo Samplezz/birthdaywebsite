@@ -16,6 +16,8 @@ export default function MusicPlayer({ musicUrl, musicTitle, autoPlayTrigger }: M
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [hasStartedOnce, setHasStartedOnce] = useState(false);
+  const [hasMediaError, setHasMediaError] = useState(false);
+  const mediaSource = musicUrl ? `/api/media?pathname=${encodeURIComponent(musicUrl)}` : '';
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -84,14 +86,27 @@ export default function MusicPlayer({ musicUrl, musicTitle, autoPlayTrigger }: M
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  if (!musicUrl || hasMediaError) {
+    return (
+      <div className="music-player-container">
+        <div className="glass-panel music-pill music-empty-state">
+          <Music size={17} />
+          <span>{hasMediaError ? 'Music is currently unavailable.' : 'No music has been added yet.'}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="music-player-container">
       {/* Hidden audio element pointing directly to storage url (supports Range requests / seeking) */}
       <audio
         ref={audioRef}
-        src={musicUrl}
+        src={mediaSource}
         preload="metadata"
         loop
+        playsInline
+        onError={() => setHasMediaError(true)}
       />
 
       <div className="glass-panel music-pill">

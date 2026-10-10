@@ -204,7 +204,9 @@ export default function EditorPage() {
       // Upload directly to server route via FormData
       const formData = new FormData();
       formData.append('file', processedBlob, `${Date.now()}.webp`);
-      formData.append('currentPhotoCount', content.photos.length.toString());
+      if (targetId) {
+        formData.append('replacePhotoId', targetId);
+      }
 
       const uploadRes = await fetch('/api/upload/photo', {
         method: 'POST',
@@ -216,14 +218,14 @@ export default function EditorPage() {
         throw new Error(uploadData.error || 'Photo upload failed');
       }
 
-      const blobUrl = uploadData.url;
+      const blobPathname = uploadData.pathname;
 
       if (targetId) {
-        updatePhoto(targetId, 'url', blobUrl);
+        updatePhoto(targetId, 'url', blobPathname);
       } else {
         const newPhoto: PhotoMemory = {
           id: `photo-${Date.now()}`,
-          url: blobUrl,
+          url: blobPathname,
           caption: 'A special moment together',
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           location: 'Our Favorite Spot',
@@ -278,7 +280,7 @@ export default function EditorPage() {
         throw new Error(uploadData.error || 'Audio upload failed');
       }
 
-      updateField('musicUrl', uploadData.url);
+      updateField('musicUrl', uploadData.pathname);
       const cleanName = file.name.replace(/\.[^/.]+$/, '');
       if (content.musicTitle === 'Romantic Acoustic Melody') {
         updateField('musicTitle', cleanName);
@@ -707,7 +709,11 @@ export default function EditorPage() {
               {content.photos.map((photo, index) => (
                 <div key={photo.id} className="photo-item-card">
                   <div className="photo-preview-box">
-                    <img src={photo.url} alt={photo.caption} className="photo-thumb" />
+                    <img
+                      src={`/api/media?pathname=${encodeURIComponent(photo.url)}`}
+                      alt={photo.caption}
+                      className="photo-thumb"
+                    />
                     <span className="photo-order-badge">#{index + 1}</span>
                     <button
                       type="button"
@@ -846,7 +852,11 @@ export default function EditorPage() {
 
             <div className="audio-preview-card">
               <span className="editor-label">🎧 Test Audio Player & Seeking:</span>
-              <audio controls src={content.musicUrl} className="editor-audio-element" />
+              <audio
+                controls
+                src={`/api/media?pathname=${encodeURIComponent(content.musicUrl)}`}
+                className="editor-audio-element"
+              />
             </div>
           </section>
         )}

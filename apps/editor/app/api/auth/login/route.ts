@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit, createSessionToken, verifyPassword } from '@birthday/shared/server';
+import {
+  checkRateLimit,
+  createSessionToken,
+  recordRateLimitFailure,
+  verifyPassword,
+} from '@birthday/shared/server';
 
 export async function POST(req: NextRequest) {
   try {
     // Extract client IP from Vercel headers (first IP in x-forwarded-for or x-real-ip)
     const forwarded = req.headers.get('x-forwarded-for');
-    const ip = forwarded ? forwarded.split(',')[0].trim() : req.headers.get('x-real-ip')?.trim() || '127.0.0.1';
+    const ip = forwarded?.split(',')[0]?.trim() || req.headers.get('x-real-ip')?.trim();
+    if (!ip) {
+      return NextResponse.json({ error: 'Client IP address is unavailable.' }, { status: 400 });
+    }
 
     // 1. Strictly Per-IP & Per-Gate Rate Limiting (Keyed by editor_login:<ip>)
     // Stranger attempts on visitor site CANNOT lock out the owner from the editor
@@ -27,9 +35,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Server-Side Editor Password Check (Strictly from Environment Variables - Zero hardcoded secrets)
-    const storedSecret = process.env.EDITOR_PASSWORD_HASH || process.env.EDITOR_PASSWORD;
+    const storedSecret = process.env.EDITOR_PASSWORD_HASH;
     if (!storedSecret) {
-      console.error('CRITICAL ERROR: EDITOR_PASSWORD_HASH or EDITOR_PASSWORD is not set in environment.');
+      console.error('CRITICAL ERROR: EDITOR_PASSWORD_HASH is not set in environment.');
       return NextResponse.json(
         { error: 'Server configuration error: editor password is not configured.' },
         { status: 500 }
@@ -39,10 +47,11 @@ export async function POST(req: NextRequest) {
     const isValid = await verifyPassword(password, storedSecret);
 
     if (!isValid) {
+      const failedRate = await recordRateLimitFailure(`editor_login:${ip}`, 5, 900);
       return NextResponse.json(
         {
           error: 'Incorrect editor password. Access denied.',
-          remainingAttempts: rateCheck.remaining,
+          remainingAttempts: failedRate.remaining,
         },
         { status: 401 }
       );
@@ -62,8 +71,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Authentication error';
-    console.error('Editor login error:', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error('Editor login error:', err);
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

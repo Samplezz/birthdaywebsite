@@ -17,11 +17,11 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
   cakeWishPrompt: 'Make a wish and blow gently into your microphone, or tap the candles!',
   cakeBlownOutMessage: 'May all your deepest dreams and sweetest wishes come true! ✨🎂',
 
-  // Photos (High-quality romantic placeholder images from Unsplash with warm tones)
+  // Photos are private Blob pathnames populated by the editor.
   photos: [
     {
       id: 'photo-1',
-      url: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=800&q=80',
+      url: 'photos/default-1.webp',
       caption: 'The golden afternoon our laughter echoed along the shore',
       date: 'May 14, 2024',
       location: 'Golden Coast',
@@ -29,7 +29,7 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
     },
     {
       id: 'photo-2',
-      url: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=800&q=80',
+      url: 'photos/default-2.webp',
       caption: 'Wrapped up in cozy warmth beneath the starlight',
       date: 'October 28, 2024',
       location: 'Autumn Hills',
@@ -37,7 +37,7 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
     },
     {
       id: 'photo-3',
-      url: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=800&q=80',
+      url: 'photos/default-3.webp',
       caption: 'Dancing under the fairy lights like no one was watching',
       date: 'February 14, 2025',
       location: 'The Old Garden',
@@ -45,7 +45,7 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
     },
     {
       id: 'photo-4',
-      url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
+      url: 'photos/default-4.webp',
       caption: 'Your radiant smile that melts away every cloud',
       date: 'August 19, 2025',
       location: 'Sunset Terrace',
@@ -55,8 +55,7 @@ May this new year of your life be filled with gentle mornings, boundless joy, an
 
   // Music
   musicTitle: 'Romantic Acoustic Melody',
-  // Gentle royalty-free romantic piano/acoustic preview mp3
-  musicUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=romantic-piano-112199.mp3',
+  musicUrl: 'audio/default.mp3',
   musicAutoplayOnFirstTap: true,
 
   // Countdown
