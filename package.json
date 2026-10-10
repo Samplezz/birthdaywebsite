@@ -1,0 +1,23 @@
+{
+  "name": "birthday-experience",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:site": "npm run dev --workspace=apps/site",
+    "dev:editor": "npm run dev --workspace=apps/editor",
+    "build:site": "npm run build --workspace=apps/site",
+    "build:editor": "npm run build --workspace=apps/editor",
+    "hash-password": "node scripts/hash-password.js"
+  },
+  "dependencies": {
+    "@types/pg": "^8.23.1",
+    "@vercel/blob": "^2.8.1",
+    "jose": "^6.2.12",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  }
+}
